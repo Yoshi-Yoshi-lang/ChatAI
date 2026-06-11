@@ -934,7 +934,12 @@ async function sendImageGeneration(text) {
             throw new Error(err.detail || "Image generation failed");
         }
         const data = await res.json();
-        renderMarkdownSecurely(data.assistant_text, assistantBodyEl);
+        if (data.job_id && data.status !== "done") {
+            const completed = await waitForImageGenerationJob(data.job_id);
+            renderMarkdownSecurely(completed.assistant_text, assistantBodyEl);
+        } else {
+            renderMarkdownSecurely(data.assistant_text, assistantBodyEl);
+        }
     } catch (e) {
         console.error("Image generation error:", e);
         showSystemMessage(`画像生成に失敗しました: ${e.message}`);
@@ -943,6 +948,26 @@ async function sendImageGeneration(text) {
         enableInputs();
         promptInputEl.focus();
     }
+}
+
+async function waitForImageGenerationJob(jobId) {
+    const startedAt = Date.now();
+    const timeoutMs = 15 * 60 * 1000;
+    while (Date.now() - startedAt < timeoutMs) {
+        const res = await apiFetch(`/api/images/jobs/${encodeURIComponent(jobId)}`);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || "画像生成ジョブの確認に失敗しました。");
+        }
+        const job = await res.json();
+        if (job.message) showTyping(job.message);
+        if (job.status === "done") return job;
+        if (job.status === "error") {
+            throw new Error(job.message || job.error || "画像生成に失敗しました。");
+        }
+        await new Promise(resolve => setTimeout(resolve, 2500));
+    }
+    throw new Error("画像生成がタイムアウトしました。");
 }
 
 function buildUserDisplayText(text, files) {
