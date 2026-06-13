@@ -1274,6 +1274,98 @@ function scrollToBottom() {
     messagesContainerEl.scrollTop = messagesContainerEl.scrollHeight;
 }
 
+// Render code block securely
+function renderCodeBlockSecurely(rawBlock, container) {
+    // Extract language if present
+    const firstLineBreak = rawBlock.indexOf("\n");
+    let lang = "";
+    let codeContent = rawBlock;
+
+    if (firstLineBreak !== -1) {
+        const candidateLang = rawBlock.substring(0, firstLineBreak).trim();
+        if (candidateLang && candidateLang.length < 15 && !candidateLang.includes(" ")) {
+            lang = candidateLang;
+            codeContent = rawBlock.substring(firstLineBreak + 1);
+        }
+    }
+
+    const pre = document.createElement("pre");
+    if (lang) pre.setAttribute("data-lang", lang);
+
+    const code = document.createElement("code");
+    code.textContent = codeContent.trim(); // Safe textContent escaping
+    pre.appendChild(code);
+    container.appendChild(pre);
+}
+
+// Render standard text block securely
+function renderStandardTextSecurely(textBlock, container) {
+    const lines = textBlock.split("\n");
+    let currentParagraph = null;
+    let currentList = null;
+
+    function flushBlocks() {
+        if (currentParagraph) {
+            container.appendChild(currentParagraph);
+            currentParagraph = null;
+        }
+        if (currentList) {
+            container.appendChild(currentList);
+            currentList = null;
+        }
+    }
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+            flushBlocks();
+            continue;
+        }
+
+        // Check list tags
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+            if (currentParagraph) {
+                container.appendChild(currentParagraph);
+                currentParagraph = null;
+            }
+            if (!currentList) {
+                currentList = document.createElement("ul");
+            }
+            const li = document.createElement("li");
+            renderInlineSecurely(trimmed.substring(2), li);
+            currentList.appendChild(li);
+        } else if (trimmed.startsWith("### ")) {
+            flushBlocks();
+            const h3 = document.createElement("h3");
+            renderInlineSecurely(trimmed.substring(4), h3);
+            container.appendChild(h3);
+        } else if (trimmed.startsWith("## ")) {
+            flushBlocks();
+            const h2 = document.createElement("h2");
+            renderInlineSecurely(trimmed.substring(3), h2);
+            container.appendChild(h2);
+        } else if (trimmed.startsWith("# ")) {
+            flushBlocks();
+            const h1 = document.createElement("h1");
+            renderInlineSecurely(trimmed.substring(2), h1);
+            container.appendChild(h1);
+        } else {
+            if (currentList) {
+                container.appendChild(currentList);
+                currentList = null;
+            }
+            if (!currentParagraph) {
+                currentParagraph = document.createElement("p");
+            } else {
+                currentParagraph.appendChild(document.createElement("br"));
+            }
+            renderInlineSecurely(line, currentParagraph);
+        }
+    }
+
+    flushBlocks();
+}
+
 // Markdown Formatter (Adheres strictly to XSS guidelines. No innerHTML.)
 function renderMarkdownSecurely(text, container) {
     container.replaceChildren(); // Safe empty
@@ -1282,104 +1374,9 @@ function renderMarkdownSecurely(text, container) {
     const parts = text.split("```");
     for (let i = 0; i < parts.length; i++) {
         if (i % 2 === 1) {
-            // Code block content
-            const rawBlock = parts[i];
-            
-            // Extract language if present
-            const firstLineBreak = rawBlock.indexOf("\n");
-            let lang = "";
-            let codeContent = rawBlock;
-            
-            if (firstLineBreak !== -1) {
-                const candidateLang = rawBlock.substring(0, firstLineBreak).trim();
-                if (candidateLang && candidateLang.length < 15 && !candidateLang.includes(" ")) {
-                    lang = candidateLang;
-                    codeContent = rawBlock.substring(firstLineBreak + 1);
-                }
-            }
-
-            const pre = document.createElement("pre");
-            if (lang) pre.setAttribute("data-lang", lang);
-            
-            const code = document.createElement("code");
-            code.textContent = codeContent.trim(); // Safe textContent escaping
-            pre.appendChild(code);
-            container.appendChild(pre);
+            renderCodeBlockSecurely(parts[i], container);
         } else {
-            // Standard text with inline formatting
-            const lines = parts[i].split("\n");
-            let currentParagraph = null;
-            let currentList = null;
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed) {
-                    if (currentParagraph) {
-                        container.appendChild(currentParagraph);
-                        currentParagraph = null;
-                    }
-                    if (currentList) {
-                        container.appendChild(currentList);
-                        currentList = null;
-                    }
-                    continue;
-                }
-
-                // Check list tags
-                if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-                    if (currentParagraph) {
-                        container.appendChild(currentParagraph);
-                        currentParagraph = null;
-                    }
-                    if (!currentList) {
-                        currentList = document.createElement("ul");
-                    }
-                    const li = document.createElement("li");
-                    renderInlineSecurely(trimmed.substring(2), li);
-                    currentList.appendChild(li);
-                } else if (trimmed.startsWith("### ")) {
-                    if (currentParagraph) container.appendChild(currentParagraph);
-                    if (currentList) container.appendChild(currentList);
-                    currentParagraph = null;
-                    currentList = null;
-                    
-                    const h3 = document.createElement("h3");
-                    renderInlineSecurely(trimmed.substring(4), h3);
-                    container.appendChild(h3);
-                } else if (trimmed.startsWith("## ")) {
-                    if (currentParagraph) container.appendChild(currentParagraph);
-                    if (currentList) container.appendChild(currentList);
-                    currentParagraph = null;
-                    currentList = null;
-                    
-                    const h2 = document.createElement("h2");
-                    renderInlineSecurely(trimmed.substring(3), h2);
-                    container.appendChild(h2);
-                } else if (trimmed.startsWith("# ")) {
-                    if (currentParagraph) container.appendChild(currentParagraph);
-                    if (currentList) container.appendChild(currentList);
-                    currentParagraph = null;
-                    currentList = null;
-                    
-                    const h1 = document.createElement("h1");
-                    renderInlineSecurely(trimmed.substring(2), h1);
-                    container.appendChild(h1);
-                } else {
-                    if (currentList) {
-                        container.appendChild(currentList);
-                        currentList = null;
-                    }
-                    if (!currentParagraph) {
-                        currentParagraph = document.createElement("p");
-                    } else {
-                        currentParagraph.appendChild(document.createElement("br"));
-                    }
-                    renderInlineSecurely(line, currentParagraph);
-                }
-            }
-
-            if (currentParagraph) container.appendChild(currentParagraph);
-            if (currentList) container.appendChild(currentList);
+            renderStandardTextSecurely(parts[i], container);
         }
     }
 }
