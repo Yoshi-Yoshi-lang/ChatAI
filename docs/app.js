@@ -11,6 +11,8 @@ let activeToolMode = "chat";
 let temporaryRoomIds = new Set();
 let draftRoomIds = new Set();
 const SIDEBAR_COLLAPSED_KEY = "discord2llm.sidebarCollapsed";
+const IMAGE_GENERATION_TIMEOUT_MS = 15 * 60 * 1000;
+const IMAGE_GENERATION_POLL_INTERVAL_MS = 2500;
 
 // DOM Elements
 const roomsListEl = document.getElementById("rooms-list");
@@ -952,8 +954,7 @@ async function sendImageGeneration(text) {
 
 async function waitForImageGenerationJob(jobId) {
     const startedAt = Date.now();
-    const timeoutMs = 15 * 60 * 1000;
-    while (Date.now() - startedAt < timeoutMs) {
+    while (Date.now() - startedAt < IMAGE_GENERATION_TIMEOUT_MS) {
         const res = await apiFetch(`/api/images/jobs/${encodeURIComponent(jobId)}`);
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -965,7 +966,7 @@ async function waitForImageGenerationJob(jobId) {
         if (job.status === "error") {
             throw new Error(job.message || job.error || "画像生成に失敗しました。");
         }
-        await new Promise(resolve => setTimeout(resolve, 2500));
+        await new Promise(resolve => setTimeout(resolve, IMAGE_GENERATION_POLL_INTERVAL_MS));
     }
     throw new Error("画像生成がタイムアウトしました。");
 }
