@@ -52,11 +52,20 @@ const modelFastSelectEl = document.getElementById("model-fast-select");
 const webSearchFastToggle = document.getElementById("web-search-fast-toggle");
 const thinkingModeFastSelect = document.getElementById("thinking-mode-fast-select");
 const API_BASE_STORAGE_KEY = "discord2llm.apiBaseUrl";
+const API_TOKEN_STORAGE_KEY = "discord2llm.apiToken";
 const pageParams = new URLSearchParams(window.location.search);
 const configuredApiBase = pageParams.get("api") || localStorage.getItem(API_BASE_STORAGE_KEY) || "";
+const configuredApiToken = pageParams.get("token") || localStorage.getItem(API_TOKEN_STORAGE_KEY) || "";
 let API_BASE_URL = normalizeApiBaseUrl(configuredApiBase);
+let API_TOKEN = configuredApiToken.trim();
 if (pageParams.get("api")) {
     localStorage.setItem(API_BASE_STORAGE_KEY, API_BASE_URL);
+}
+if (pageParams.get("token")) {
+    localStorage.setItem(API_TOKEN_STORAGE_KEY, API_TOKEN);
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("token");
+    window.history.replaceState({}, "", cleanUrl.toString());
 }
 
 function normalizeApiBaseUrl(url) {
@@ -75,11 +84,17 @@ function apiPath(path) {
     return `${API_BASE_URL}${path}`;
 }
 
-function apiFetch(path, options) {
+function apiFetch(path, options = {}) {
     if (!hasBackendConfig() && isPagesHost()) {
         return Promise.reject(new Error("Backend URL is not configured"));
     }
-    return fetch(apiPath(path), options);
+    const requestOptions = { ...options };
+    const headers = new Headers(requestOptions.headers || {});
+    if (API_TOKEN) {
+        headers.set("X-API-Key", API_TOKEN);
+    }
+    requestOptions.headers = headers;
+    return fetch(apiPath(path), requestOptions);
 }
 
 function resolveBackendResourceUrl(url) {
@@ -103,7 +118,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function showBackendSetup({
     titleText = "バックエンドURLを設定",
-    descriptionText = "GitHub Pagesは画面だけを配信します。スマホで使うには、Cloudflare TunnelなどのバックエンドURLを一度保存してください。"
+    descriptionText = "GitHub Pagesは画面だけを配信します。スマホで使うには、Cloudflare TunnelなどのバックエンドURLを一度保存してください。",
+    requireToken = false
 } = {}) {
     activeRoomId = null;
     rooms = [];
@@ -133,6 +149,14 @@ function showBackendSetup({
     input.value = API_BASE_URL;
     input.required = true;
 
+    const tokenInput = document.createElement("input");
+    tokenInput.type = "password";
+    tokenInput.autocapitalize = "none";
+    tokenInput.autocomplete = "current-password";
+    tokenInput.placeholder = requireToken ? "APIトークン" : "APIトークン（設定している場合のみ）";
+    tokenInput.value = API_TOKEN;
+    tokenInput.required = requireToken;
+
     const saveButton = document.createElement("button");
     saveButton.type = "submit";
     saveButton.className = "welcome-action";
@@ -140,9 +164,10 @@ function showBackendSetup({
 
     const help = document.createElement("p");
     help.className = "backend-setup-help";
-    help.textContent = "保存後はこの端末にもURLが記憶されます。URLが変わった場合は、同じ画面で新しいURLを保存してください。";
+    help.textContent = "保存後はこの端末にもURLとトークンが記憶されます。URLが変わった場合は、同じ画面で新しいURLを保存してください。";
 
     form.appendChild(input);
+    form.appendChild(tokenInput);
     form.appendChild(saveButton);
     setupEl.appendChild(title);
     setupEl.appendChild(description);
@@ -160,9 +185,22 @@ function showBackendSetup({
             return;
         }
         input.setCustomValidity("");
+        const nextToken = tokenInput.value.trim();
+        if (requireToken && !nextToken) {
+            tokenInput.setCustomValidity("APIトークンを入力してください。");
+            tokenInput.reportValidity();
+            return;
+        }
+        tokenInput.setCustomValidity("");
         localStorage.setItem(API_BASE_STORAGE_KEY, nextApiBase);
+        if (nextToken) {
+            localStorage.setItem(API_TOKEN_STORAGE_KEY, nextToken);
+        } else {
+            localStorage.removeItem(API_TOKEN_STORAGE_KEY);
+        }
         const nextUrl = new URL(window.location.href);
         nextUrl.searchParams.set("api", nextApiBase);
+        nextUrl.searchParams.delete("token");
         window.location.href = nextUrl.toString();
     });
 }
@@ -171,6 +209,14 @@ function showBackendSetup({
 async function loadRooms() {
     try {
         const res = await apiFetch("/api/rooms");
+        if (res.status === 401) {
+            showBackendSetup({
+                titleText: "APIトークンが必要です",
+                descriptionText: "このバックエンドはWeb API保護が有効です。管理者が設定したAPIトークンを保存してください。",
+                requireToken: true
+            });
+            return;
+        }
         if (!res.ok) throw new Error("Rooms load failed");
         const data = await res.json();
         rooms = data.rooms.map(roomId => roomId.toString());
