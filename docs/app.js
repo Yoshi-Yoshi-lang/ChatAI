@@ -10,6 +10,7 @@ let selectedFiles = [];
 let activeToolMode = "chat";
 let temporaryRoomIds = new Set();
 let draftRoomIds = new Set();
+const DEFAULT_SETTINGS_ROOM_ID = 0;
 const SIDEBAR_COLLAPSED_KEY = "discord2llm.sidebarCollapsed";
 
 // DOM Elements
@@ -77,7 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ensureInputReady();
     showPagesBackendHint();
     loadRooms();
-    loadModels();
+    loadModels().then(loadDefaultSettings);
     setupEventListeners();
 });
 
@@ -135,6 +136,33 @@ async function loadModels() {
     } catch (e) {
         console.error("Error loading models:", e);
     }
+}
+
+async function loadDefaultSettings() {
+    if (activeRoomId) return;
+    try {
+        const res = await apiFetch(`/api/settings/${DEFAULT_SETTINGS_ROOM_ID}`);
+        if (!res.ok) throw new Error("Default settings fetch failed");
+        const config = await res.json();
+        applySettingsToForm(config);
+        updateStatusPanel(config);
+    } catch (e) {
+        console.error("Error loading default settings:", e);
+    }
+}
+
+function applySettingsToForm(config) {
+    document.getElementById("settings-model").value = config.model || "";
+    document.getElementById("settings-system-prompt").value = config.system_prompt || "";
+    document.getElementById("settings-temperature").value = config.temperature ?? 0.8;
+    document.getElementById("settings-max-tokens").value = config.max_tokens ?? 2048;
+    document.getElementById("settings-web-search").checked = !!config.web_search_enabled;
+    document.getElementById("settings-web-scrape").checked = !!config.web_scrape_enabled;
+    document.getElementById("settings-search-engine").value = config.search_engine || "duckduckgo";
+    document.getElementById("settings-thinking-mode").value = config.thinking_mode || "off";
+    modelFastSelectEl.value = config.model || "";
+    webSearchFastToggle.checked = !!config.web_search_enabled;
+    thinkingModeFastSelect.value = config.thinking_mode || "off";
 }
 
 // Render rooms list in sidebar
@@ -354,20 +382,7 @@ async function loadRoomSettings(roomId) {
         if (!res.ok) throw new Error("Settings fetch failed");
         const config = await res.json();
         
-        // Bind to settings form elements
-        document.getElementById("settings-model").value = config.model || "";
-        document.getElementById("settings-system-prompt").value = config.system_prompt || "";
-        document.getElementById("settings-temperature").value = config.temperature ?? 0.8;
-        document.getElementById("settings-max-tokens").value = config.max_tokens ?? 2048;
-        document.getElementById("settings-web-search").checked = !!config.web_search_enabled;
-        document.getElementById("settings-web-scrape").checked = !!config.web_scrape_enabled;
-        document.getElementById("settings-search-engine").value = config.search_engine || "duckduckgo";
-        document.getElementById("settings-thinking-mode").value = config.thinking_mode || "off";
-        
-        // Sync with fast selector in mini controls
-        modelFastSelectEl.value = config.model || "";
-        webSearchFastToggle.checked = !!config.web_search_enabled;
-        thinkingModeFastSelect.value = config.thinking_mode || "off";
+        applySettingsToForm(config);
         updateStatusPanel(config);
     } catch (e) {
         console.error("Error loading settings:", e);
@@ -497,19 +512,10 @@ function setupEventListeners() {
     settingsSaveBtnEl.addEventListener("click", async () => {
         if (!activeRoomId) return;
         
-        const settingsData = {
-            model: document.getElementById("settings-model").value,
-            system_prompt: document.getElementById("settings-system-prompt").value.trim(),
-            temperature: parseFloat(document.getElementById("settings-temperature").value) || 0.8,
-            max_tokens: parseInt(document.getElementById("settings-max-tokens").value) || 2048,
-            web_search_enabled: document.getElementById("settings-web-search").checked,
-            web_scrape_enabled: document.getElementById("settings-web-scrape").checked,
-            search_engine: document.getElementById("settings-search-engine").value,
-            thinking_mode: document.getElementById("settings-thinking-mode").value
-        };
+        const settingsData = getCurrentSettingsData();
 
         try {
-            const res = await apiFetch(`/api/settings/${activeRoomId}`, {
+            const res = await apiFetch(`/api/settings/${activeRoomId || DEFAULT_SETTINGS_ROOM_ID}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(settingsData)
@@ -551,6 +557,7 @@ function setupEventListeners() {
         document.getElementById("settings-model").value = modelFastSelectEl.value;
         if (!activeRoomId) {
             updateStatusPanel();
+            await saveDefaultSettings();
             return;
         }
         try {
@@ -574,6 +581,7 @@ function setupEventListeners() {
         document.getElementById("settings-web-search").checked = webSearchFastToggle.checked;
         if (!activeRoomId) {
             updateStatusPanel();
+            await saveDefaultSettings();
             return;
         }
         try {
@@ -601,6 +609,7 @@ function setupEventListeners() {
         document.getElementById("settings-thinking-mode").value = thinkingModeFastSelect.value;
         if (!activeRoomId) {
             updateStatusPanel();
+            await saveDefaultSettings();
             return;
         }
         try {
@@ -791,6 +800,20 @@ async function saveCurrentSettingsForActiveRoom() {
         updateStatusPanel(settingsData);
     } catch (e) {
         console.error("Error saving current room settings:", e);
+    }
+}
+
+async function saveDefaultSettings() {
+    const settingsData = getCurrentSettingsData();
+    try {
+        const res = await apiFetch(`/api/settings/${DEFAULT_SETTINGS_ROOM_ID}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(settingsData)
+        });
+        if (!res.ok) throw new Error("Default settings save failed");
+    } catch (e) {
+        console.error("Error saving default settings:", e);
     }
 }
 
