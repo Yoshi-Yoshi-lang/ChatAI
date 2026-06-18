@@ -1394,77 +1394,127 @@ function renderMarkdownSecurely(text, container) {
                 }
             }
 
-            const pre = document.createElement("pre");
-            if (lang) pre.setAttribute("data-lang", lang);
-            
-            const code = document.createElement("code");
-            code.textContent = codeContent.trim(); // Safe textContent escaping
-            pre.appendChild(code);
-            container.appendChild(pre);
+            container.appendChild(createCodeBlock(codeContent.trim(), lang));
         } else {
             // Standard text with inline formatting
             const lines = parts[i].split("\n");
             let currentParagraph = null;
             let currentList = null;
+            let currentListType = null;
+            let currentBlockquote = null;
+            let tableBuffer = [];
+
+            const flushParagraph = () => {
+                if (currentParagraph) {
+                    container.appendChild(currentParagraph);
+                    currentParagraph = null;
+                }
+            };
+            const flushList = () => {
+                if (currentList) {
+                    container.appendChild(currentList);
+                    currentList = null;
+                    currentListType = null;
+                }
+            };
+            const flushBlockquote = () => {
+                if (currentBlockquote) {
+                    container.appendChild(currentBlockquote);
+                    currentBlockquote = null;
+                }
+            };
+            const flushTable = () => {
+                if (tableBuffer.length) {
+                    const table = createMarkdownTable(tableBuffer);
+                    if (table) container.appendChild(table);
+                    else {
+                        tableBuffer.forEach(row => {
+                            const p = document.createElement("p");
+                            renderInlineSecurely(row, p);
+                            container.appendChild(p);
+                        });
+                    }
+                    tableBuffer = [];
+                }
+            };
+            const flushAll = () => {
+                flushTable();
+                flushParagraph();
+                flushList();
+                flushBlockquote();
+            };
 
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) {
-                    if (currentParagraph) {
-                        container.appendChild(currentParagraph);
-                        currentParagraph = null;
-                    }
-                    if (currentList) {
-                        container.appendChild(currentList);
-                        currentList = null;
-                    }
+                    flushAll();
                     continue;
                 }
 
-                // Check list tags
-                if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-                    if (currentParagraph) {
-                        container.appendChild(currentParagraph);
-                        currentParagraph = null;
+                if (trimmed.includes("|") && trimmed.startsWith("|")) {
+                    flushParagraph();
+                    flushList();
+                    flushBlockquote();
+                    tableBuffer.push(trimmed);
+                    continue;
+                }
+                flushTable();
+
+                if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+                    flushAll();
+                    container.appendChild(document.createElement("hr"));
+                } else if (trimmed.startsWith("> ")) {
+                    flushParagraph();
+                    flushList();
+                    if (!currentBlockquote) {
+                        currentBlockquote = document.createElement("blockquote");
+                    } else {
+                        currentBlockquote.appendChild(document.createElement("br"));
                     }
-                    if (!currentList) {
+                    renderInlineSecurely(trimmed.substring(2), currentBlockquote);
+                } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+                    flushParagraph();
+                    flushBlockquote();
+                    if (!currentList || currentListType !== "ul") {
+                        flushList();
                         currentList = document.createElement("ul");
+                        currentListType = "ul";
                     }
                     const li = document.createElement("li");
                     renderInlineSecurely(trimmed.substring(2), li);
                     currentList.appendChild(li);
+                } else if (/^\d+\.\s+/.test(trimmed)) {
+                    flushParagraph();
+                    flushBlockquote();
+                    if (!currentList || currentListType !== "ol") {
+                        flushList();
+                        currentList = document.createElement("ol");
+                        currentListType = "ol";
+                    }
+                    const li = document.createElement("li");
+                    renderInlineSecurely(trimmed.replace(/^\d+\.\s+/, ""), li);
+                    currentList.appendChild(li);
                 } else if (trimmed.startsWith("### ")) {
-                    if (currentParagraph) container.appendChild(currentParagraph);
-                    if (currentList) container.appendChild(currentList);
-                    currentParagraph = null;
-                    currentList = null;
+                    flushAll();
                     
                     const h3 = document.createElement("h3");
                     renderInlineSecurely(trimmed.substring(4), h3);
                     container.appendChild(h3);
                 } else if (trimmed.startsWith("## ")) {
-                    if (currentParagraph) container.appendChild(currentParagraph);
-                    if (currentList) container.appendChild(currentList);
-                    currentParagraph = null;
-                    currentList = null;
+                    flushAll();
                     
                     const h2 = document.createElement("h2");
                     renderInlineSecurely(trimmed.substring(3), h2);
                     container.appendChild(h2);
                 } else if (trimmed.startsWith("# ")) {
-                    if (currentParagraph) container.appendChild(currentParagraph);
-                    if (currentList) container.appendChild(currentList);
-                    currentParagraph = null;
-                    currentList = null;
+                    flushAll();
                     
                     const h1 = document.createElement("h1");
                     renderInlineSecurely(trimmed.substring(2), h1);
                     container.appendChild(h1);
                 } else {
-                    if (currentList) {
-                        container.appendChild(currentList);
-                        currentList = null;
-                    }
+                    flushList();
+                    flushBlockquote();
                     if (!currentParagraph) {
                         currentParagraph = document.createElement("p");
                     } else {
@@ -1474,22 +1524,125 @@ function renderMarkdownSecurely(text, container) {
                 }
             }
 
-            if (currentParagraph) container.appendChild(currentParagraph);
-            if (currentList) container.appendChild(currentList);
+            flushAll();
         }
     }
+}
+
+function createCodeBlock(codeText, lang) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-block";
+    if (lang) wrapper.setAttribute("data-lang", lang);
+
+    const header = document.createElement("div");
+    header.className = "code-block-header";
+
+    const label = document.createElement("span");
+    label.textContent = lang || "code";
+    header.appendChild(label);
+
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.className = "code-copy-btn";
+    copyButton.textContent = "コピー";
+    copyButton.addEventListener("click", async () => {
+        const ok = await copyTextToClipboard(codeText);
+        copyButton.textContent = ok ? "コピー済み" : "コピー失敗";
+        setTimeout(() => {
+            copyButton.textContent = "コピー";
+        }, 1400);
+    });
+    header.appendChild(copyButton);
+
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.textContent = codeText;
+    pre.appendChild(code);
+
+    wrapper.appendChild(header);
+    wrapper.appendChild(pre);
+    return wrapper;
+}
+
+async function copyTextToClipboard(text) {
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch (e) {
+        console.error("Clipboard API failed:", e);
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        return document.execCommand("copy");
+    } catch (e) {
+        console.error("Fallback copy failed:", e);
+        return false;
+    } finally {
+        textarea.remove();
+    }
+}
+
+function createMarkdownTable(lines) {
+    if (lines.length < 2 || !/^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(lines[1])) {
+        return null;
+    }
+
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const tbody = document.createElement("tbody");
+
+    const headers = splitTableRow(lines[0]);
+    const aligns = splitTableRow(lines[1]).map(cell => {
+        const value = cell.trim();
+        if (value.startsWith(":") && value.endsWith(":")) return "center";
+        if (value.endsWith(":")) return "right";
+        return "left";
+    });
+
+    const headRow = document.createElement("tr");
+    headers.forEach((headerText, index) => {
+        const th = document.createElement("th");
+        th.style.textAlign = aligns[index] || "left";
+        renderInlineSecurely(headerText.trim(), th);
+        headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+
+    lines.slice(2).forEach(line => {
+        const row = document.createElement("tr");
+        splitTableRow(line).forEach((cellText, index) => {
+            const td = document.createElement("td");
+            td.style.textAlign = aligns[index] || "left";
+            renderInlineSecurely(cellText.trim(), td);
+            row.appendChild(td);
+        });
+        tbody.appendChild(row);
+    });
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    return table;
+}
+
+function splitTableRow(line) {
+    return line.replace(/^\|/, "").replace(/\|$/, "").split("|");
 }
 
 // Render inline elements (bold, code, links) securely
 function renderInlineSecurely(text, element) {
     let lastIndex = 0;
     
-    // Search tags:
-    // 0. Images: ![alt](url)
-    // 1. Inline code: `code`
-    // 2. Bold: **bold**
-    // 3. Links: [title](url)
-    const tokenRegex = /(!\[.*?\]\(.*?\)|\*\*.*?\*\*|`.*?`|\[.*?\]\(.*?\))/g;
+    // Search tags: images, inline code, bold, italic, strikethrough, links.
+    const tokenRegex = /(!\[.*?\]\(.*?\)|\*\*.*?\*\*|~~.*?~~|`.*?`|\*[^*\n]+?\*|\[.*?\]\(.*?\))/g;
     let match;
 
     while ((match = tokenRegex.exec(text)) !== null) {
@@ -1519,10 +1672,18 @@ function renderInlineSecurely(text, element) {
             const strong = document.createElement("strong");
             strong.textContent = token.substring(2, token.length - 2);
             element.appendChild(strong);
+        } else if (token.startsWith("~~") && token.endsWith("~~")) {
+            const del = document.createElement("del");
+            del.textContent = token.substring(2, token.length - 2);
+            element.appendChild(del);
         } else if (token.startsWith("`") && token.endsWith("`")) {
             const code = document.createElement("code");
             code.textContent = token.substring(1, token.length - 1);
             element.appendChild(code);
+        } else if (token.startsWith("*") && token.endsWith("*")) {
+            const em = document.createElement("em");
+            em.textContent = token.substring(1, token.length - 1);
+            element.appendChild(em);
         } else if (token.startsWith("[")) {
             const titleEnd = token.indexOf("]");
             const urlStart = token.indexOf("(", titleEnd);
