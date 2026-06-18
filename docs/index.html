@@ -92,37 +92,48 @@
                             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/></svg>
                         </button>
                         <div id="tool-menu" class="tool-menu hidden" role="menu">
-                            <button id="attach-file-btn" type="button" role="menuitem">
-                                <span>ファイルを添付</span>
-                                <small>PDF / テキスト / 画像</small>
-                            </button>
-                            <button id="image-mode-btn" type="button" role="menuitem">
-                                <span>画像生成</span>
-                                <small>ComfyUIで生成</small>
-                            </button>
+                            <details class="tool-accordion" open>
+                                <summary>入力</summary>
+                                <button id="attach-file-btn" type="button" role="menuitem">
+                                    <span>ファイルを添付</span>
+                                    <small>PDF / テキスト / 画像</small>
+                                </button>
+                                <button id="image-mode-btn" type="button" role="menuitem">
+                                    <span>画像生成</span>
+                                    <small>ComfyUIで生成</small>
+                                </button>
+                            </details>
+                            <details class="tool-accordion">
+                                <summary>簡易設定</summary>
+                                <label class="tool-field" for="model-fast-select">
+                                    <span>モデル</span>
+                                    <select id="model-fast-select"></select>
+                                </label>
+                                <label class="tool-switch">
+                                    <span>Web検索</span>
+                                    <span class="switch">
+                                        <input type="checkbox" id="web-search-fast-toggle">
+                                        <span class="slider"></span>
+                                    </span>
+                                </label>
+                                <label class="tool-field" for="thinking-mode-fast-select">
+                                    <span>モード</span>
+                                    <select id="thinking-mode-fast-select">
+                                        <option value="off">通常</option>
+                                        <option value="native">推論</option>
+                                        <option value="debate">討論</option>
+                                    </select>
+                                </label>
+                            </details>
                         </div>
                     </div>
                     <input id="file-input" type="file" multiple class="hidden" accept=".txt,.md,.markdown,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yaml,.yml,.ini,.cfg,.conf,.log,.pdf,image/*">
-                    <textarea id="prompt-input" placeholder="メッセージを入力してください... (Cmd/Ctrl+Enter で送信)" rows="1" disabled></textarea>
-                    <button id="send-btn" class="send-btn" disabled>
+                    <textarea id="prompt-input" placeholder="メッセージを入力してください... (Cmd/Ctrl+Enter で送信)" rows="1"></textarea>
+                    <button id="send-btn" class="send-btn">
                         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                     </button>
                 </div>
                 <div class="mini-controls">
-                    <div class="control-item">
-                        <label class="switch">
-                            <input type="checkbox" id="web-search-fast-toggle">
-                            <span class="slider"></span>
-                        </label>
-                        <span>Web検索</span>
-                    </div>
-                    <div class="control-item">
-                        <select id="thinking-mode-fast-select">
-                            <option value="off">通常モード (Off)</option>
-                            <option value="native">推論モード (Native)</option>
-                            <option value="debate">討論モード (Debate)</option>
-                        </select>
-                    </div>
                     <div id="input-context-hint" class="input-context-hint hidden"></div>
                 </div>
             </div>
@@ -140,70 +151,77 @@
             </div>
             <div class="modal-body">
                 <form id="settings-form">
-                    <div class="form-group">
-                        <label for="settings-model">LLM モデル</label>
-                        <select id="settings-model">
-                            <!-- Models loaded dynamically -->
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="settings-system-prompt">カスタムプロンプト</label>
-                        <textarea id="settings-system-prompt" rows="7" placeholder="このルーム専用のシステムプロンプトを入力。空欄で標準設定に戻ります。"></textarea>
-                        <p class="form-help">`{username}` または `{user}` を入れると現在のユーザー名に置き換わります。</p>
-                    </div>
-                    
-                    <div class="form-row">
+                    <details class="settings-section" open>
+                        <summary>モデルとプロンプト</summary>
                         <div class="form-group">
-                            <label for="settings-temperature">温度 (Temperature)</label>
-                            <input type="number" id="settings-temperature" step="0.1" min="0.0" max="2.0">
+                            <label for="settings-model">LLM モデル</label>
+                            <select id="settings-model">
+                                <!-- Models loaded dynamically -->
+                            </select>
                         </div>
                         <div class="form-group">
-                            <label for="settings-max-tokens">最大トークン数 (Max Tokens)</label>
-                            <input type="number" id="settings-max-tokens" step="1" min="1">
+                            <label for="settings-system-prompt">カスタムプロンプト</label>
+                            <textarea id="settings-system-prompt" rows="7" placeholder="このルーム専用のシステムプロンプトを入力。空欄で標準設定に戻ります。"></textarea>
+                            <p class="form-help">`{username}` または `{user}` を入れると現在のユーザー名に置き換わります。</p>
                         </div>
-                    </div>
+                    </details>
 
-                    <div class="form-group checkbox-group">
-                        <label class="switch">
-                            <input type="checkbox" id="settings-web-search">
-                            <span class="slider"></span>
-                        </label>
-                        <div class="switch-label">
-                            <strong>Web検索機能を有効にする</strong>
-                            <p>質問に応じてリアルタイムなWeb情報を取得します</p>
+                    <details class="settings-section">
+                        <summary>生成設定</summary>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="settings-temperature">温度 (Temperature)</label>
+                                <input type="number" id="settings-temperature" step="0.1" min="0.0" max="2.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="settings-max-tokens">最大トークン数 (Max Tokens)</label>
+                                <input type="number" id="settings-max-tokens" step="1" min="1">
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="form-group" id="search-engine-group">
-                        <label for="settings-search-engine">検索エンジン</label>
-                        <select id="settings-search-engine">
-                            <option value="duckduckgo">DuckDuckGo</option>
-                            <option value="google">Google Custom Search</option>
-                            <option value="googlenews">Google News</option>
-                            <option value="wikipedia">Wikipedia</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group checkbox-group" id="web-scrape-group">
-                        <label class="switch">
-                            <input type="checkbox" id="settings-web-scrape">
-                            <span class="slider"></span>
-                        </label>
-                        <div class="switch-label">
-                            <strong>詳細ページのスクレイピング</strong>
-                            <p>検索結果の上位URLにアクセスして本文を解析します</p>
+                        <div class="form-group">
+                            <label for="settings-thinking-mode">推論モード</label>
+                            <select id="settings-thinking-mode">
+                                <option value="off">通常モード (Off)</option>
+                                <option value="native">推論モード (Native)</option>
+                                <option value="debate">討論モード (Debate)</option>
+                            </select>
                         </div>
-                    </div>
+                    </details>
 
-                    <div class="form-group">
-                        <label for="settings-thinking-mode">推論モード</label>
-                        <select id="settings-thinking-mode">
-                            <option value="off">通常モード (Off)</option>
-                            <option value="native">推論モード (Native)</option>
-                            <option value="debate">討論モード (Debate)</option>
-                        </select>
-                    </div>
+                    <details class="settings-section">
+                        <summary>Web検索</summary>
+                        <div class="form-group checkbox-group">
+                            <label class="switch">
+                                <input type="checkbox" id="settings-web-search">
+                                <span class="slider"></span>
+                            </label>
+                            <div class="switch-label">
+                                <strong>Web検索機能を有効にする</strong>
+                                <p>質問に応じてリアルタイムなWeb情報を取得します</p>
+                            </div>
+                        </div>
+
+                        <div class="form-group" id="search-engine-group">
+                            <label for="settings-search-engine">検索エンジン</label>
+                            <select id="settings-search-engine">
+                                <option value="duckduckgo">DuckDuckGo</option>
+                                <option value="google">Google Custom Search</option>
+                                <option value="googlenews">Google News</option>
+                                <option value="wikipedia">Wikipedia</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group checkbox-group" id="web-scrape-group">
+                            <label class="switch">
+                                <input type="checkbox" id="settings-web-scrape">
+                                <span class="slider"></span>
+                            </label>
+                            <div class="switch-label">
+                                <strong>詳細ページのスクレイピング</strong>
+                                <p>検索結果の上位URLにアクセスして本文を解析します</p>
+                            </div>
+                        </div>
+                    </details>
 
                     <div class="modal-actions">
                         <button type="button" id="settings-save-btn" class="btn btn-primary">設定を保存</button>
