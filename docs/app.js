@@ -54,9 +54,21 @@ const thinkingModeFastSelect = document.getElementById("thinking-mode-fast-selec
 const API_BASE_STORAGE_KEY = "discord2llm.apiBaseUrl";
 const pageParams = new URLSearchParams(window.location.search);
 const configuredApiBase = pageParams.get("api") || localStorage.getItem(API_BASE_STORAGE_KEY) || "";
-const API_BASE_URL = configuredApiBase.replace(/\/+$/, "");
+let API_BASE_URL = normalizeApiBaseUrl(configuredApiBase);
 if (pageParams.get("api")) {
     localStorage.setItem(API_BASE_STORAGE_KEY, API_BASE_URL);
+}
+
+function normalizeApiBaseUrl(url) {
+    return (url || "").trim().replace(/\/+$/, "");
+}
+
+function hasBackendConfig() {
+    return API_BASE_URL.length > 0;
+}
+
+function isPagesHost() {
+    return window.location.hostname.endsWith("github.io");
 }
 
 function apiPath(path) {
@@ -64,6 +76,9 @@ function apiPath(path) {
 }
 
 function apiFetch(path, options) {
+    if (!hasBackendConfig() && isPagesHost()) {
+        return Promise.reject(new Error("Backend URL is not configured"));
+    }
     return fetch(apiPath(path), options);
 }
 
@@ -77,18 +92,79 @@ document.addEventListener("DOMContentLoaded", () => {
     initializeViewportSizing();
     initializeSidebarState();
     ensureInputReady();
-    showPagesBackendHint();
+    setupEventListeners();
+    if (!hasBackendConfig() && isPagesHost()) {
+        showBackendSetup();
+        return;
+    }
     loadRooms();
     loadModels().then(loadDefaultSettings);
-    setupEventListeners();
 });
 
-function showPagesBackendHint() {
-    const isPagesHost = window.location.hostname.endsWith("github.io");
-    if (!isPagesHost || API_BASE_URL) return;
-    showSystemMessage(
-        "GitHub PagesではUIのみ配信されます。バックエンドを使う場合はURL末尾に ?api=https://your-backend.example.com を付けて開いてください。"
-    );
+function showBackendSetup({
+    titleText = "バックエンドURLを設定",
+    descriptionText = "GitHub Pagesは画面だけを配信します。スマホで使うには、Cloudflare TunnelなどのバックエンドURLを一度保存してください。"
+} = {}) {
+    activeRoomId = null;
+    rooms = [];
+    renderRooms();
+    activeRoomTitleEl.textContent = "バックエンド未設定";
+    resetStatusPanel();
+    messagesContainerEl.replaceChildren();
+
+    const setupEl = document.createElement("div");
+    setupEl.className = "backend-setup";
+
+    const title = document.createElement("h2");
+    title.textContent = titleText;
+
+    const description = document.createElement("p");
+    description.textContent = descriptionText;
+
+    const form = document.createElement("form");
+    form.className = "backend-setup-form";
+
+    const input = document.createElement("input");
+    input.type = "url";
+    input.inputMode = "url";
+    input.autocapitalize = "none";
+    input.autocomplete = "url";
+    input.placeholder = "https://example.trycloudflare.com";
+    input.value = API_BASE_URL;
+    input.required = true;
+
+    const saveButton = document.createElement("button");
+    saveButton.type = "submit";
+    saveButton.className = "welcome-action";
+    saveButton.textContent = "保存して開く";
+
+    const help = document.createElement("p");
+    help.className = "backend-setup-help";
+    help.textContent = "保存後はこの端末にもURLが記憶されます。URLが変わった場合は、同じ画面で新しいURLを保存してください。";
+
+    form.appendChild(input);
+    form.appendChild(saveButton);
+    setupEl.appendChild(title);
+    setupEl.appendChild(description);
+    setupEl.appendChild(form);
+    setupEl.appendChild(help);
+    messagesContainerEl.appendChild(setupEl);
+    disableBackendDependentControls();
+
+    form.addEventListener("submit", event => {
+        event.preventDefault();
+        const nextApiBase = normalizeApiBaseUrl(input.value);
+        if (!/^https?:\/\//i.test(nextApiBase)) {
+            input.setCustomValidity("https:// から始まるURLを入力してください。");
+            input.reportValidity();
+            return;
+        }
+        input.setCustomValidity("");
+        localStorage.setItem(API_BASE_STORAGE_KEY, nextApiBase);
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set("api", nextApiBase);
+        window.location.href = nextUrl.toString();
+    });
 }
 
 // Load available chat rooms
@@ -102,6 +178,13 @@ async function loadRooms() {
         renderRooms();
     } catch (e) {
         console.error("Error loading rooms:", e);
+        if (isPagesHost()) {
+            showBackendSetup({
+                titleText: "バックエンドに接続できません",
+                descriptionText: "保存済みのバックエンドURLに接続できませんでした。Cloudflare TunnelのURLが変わった場合は、新しいURLを保存してください。"
+            });
+            return;
+        }
         showSystemMessage("ルーム一覧の読み込みに失敗しました。");
     }
 }
@@ -775,6 +858,17 @@ function ensureInputReady() {
     sendBtnEl.removeAttribute("disabled");
     autoResizePromptInput();
     updateInputContextHint();
+}
+
+function disableBackendDependentControls() {
+    promptInputEl.disabled = true;
+    sendBtnEl.disabled = true;
+    newRoomBtnEl.disabled = true;
+    temporaryRoomBtnEl.disabled = true;
+    railNewRoomBtnEl.disabled = true;
+    attachFileBtnEl.disabled = true;
+    imageModeBtnEl.disabled = true;
+    inputContextHintEl.textContent = "バックエンドURLを設定してください";
 }
 
 function getCurrentSettingsData() {
