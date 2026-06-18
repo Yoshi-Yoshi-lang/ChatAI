@@ -47,6 +47,7 @@ const railHistoryBtnEl = document.getElementById("rail-history-btn");
 const railSettingsBtnEl = document.getElementById("rail-settings-btn");
 
 // Mini-controls fast select
+const modelFastSelectEl = document.getElementById("model-fast-select");
 const webSearchFastToggle = document.getElementById("web-search-fast-toggle");
 const thinkingModeFastSelect = document.getElementById("thinking-mode-fast-select");
 const API_BASE_STORAGE_KEY = "discord2llm.apiBaseUrl";
@@ -73,6 +74,7 @@ function resolveBackendResourceUrl(url) {
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
     initializeSidebarState();
+    ensureInputReady();
     showPagesBackendHint();
     loadRooms();
     loadModels();
@@ -265,12 +267,14 @@ function getRoomSummary(roomId) {
 function renderModelOptions() {
     const modelSelect = document.getElementById("settings-model");
     modelSelect.replaceChildren(); // Safe empty
+    modelFastSelectEl.replaceChildren();
 
     if (models.length === 0) {
         const opt = document.createElement("option");
         opt.value = "";
         opt.textContent = "モデルが取得できませんでした";
         modelSelect.appendChild(opt);
+        modelFastSelectEl.appendChild(opt.cloneNode(true));
         return;
     }
 
@@ -279,6 +283,7 @@ function renderModelOptions() {
         opt.value = model;
         opt.textContent = model;
         modelSelect.appendChild(opt);
+        modelFastSelectEl.appendChild(opt.cloneNode(true));
     });
 }
 
@@ -329,7 +334,7 @@ async function deleteRoom(roomId) {
             messagesContainerEl.appendChild(welcomeScreenEl);
             activeRoomTitleEl.textContent = "";
             resetStatusPanel();
-            disableInputs();
+            ensureInputReady();
         }
 
         rooms = rooms.filter(id => id !== roomId);
@@ -360,6 +365,7 @@ async function loadRoomSettings(roomId) {
         document.getElementById("settings-thinking-mode").value = config.thinking_mode || "off";
         
         // Sync with fast selector in mini controls
+        modelFastSelectEl.value = config.model || "";
         webSearchFastToggle.checked = !!config.web_search_enabled;
         thinkingModeFastSelect.value = config.thinking_mode || "off";
         updateStatusPanel(config);
@@ -512,6 +518,7 @@ function setupEventListeners() {
             if (!res.ok) throw new Error("Settings save failed");
             
             // Sync fast controls
+            modelFastSelectEl.value = settingsData.model;
             webSearchFastToggle.checked = settingsData.web_search_enabled;
             thinkingModeFastSelect.value = settingsData.thinking_mode;
             updateStatusPanel(settingsData);
@@ -539,9 +546,36 @@ function setupEventListeners() {
         }
     });
 
-    // Mini fast select sync callbacks
+    // Fast setting sync callbacks
+    modelFastSelectEl.addEventListener("change", async () => {
+        document.getElementById("settings-model").value = modelFastSelectEl.value;
+        if (!activeRoomId) {
+            updateStatusPanel();
+            return;
+        }
+        try {
+            const res = await apiFetch(`/api/settings/${activeRoomId}`);
+            if (res.ok) {
+                const config = await res.json();
+                config.model = modelFastSelectEl.value;
+                await apiFetch(`/api/settings/${activeRoomId}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(config)
+                });
+                updateStatusPanel(config);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    });
+
     webSearchFastToggle.addEventListener("change", async () => {
-        if (!activeRoomId) return;
+        document.getElementById("settings-web-search").checked = webSearchFastToggle.checked;
+        if (!activeRoomId) {
+            updateStatusPanel();
+            return;
+        }
         try {
             // Fetch current settings, edit fast variable, save back
             const res = await apiFetch(`/api/settings/${activeRoomId}`);
@@ -564,7 +598,11 @@ function setupEventListeners() {
     });
 
     thinkingModeFastSelect.addEventListener("change", async () => {
-        if (!activeRoomId) return;
+        document.getElementById("settings-thinking-mode").value = thinkingModeFastSelect.value;
+        if (!activeRoomId) {
+            updateStatusPanel();
+            return;
+        }
         try {
             const res = await apiFetch(`/api/settings/${activeRoomId}`);
             if (res.ok) {
@@ -720,12 +758,40 @@ async function ensureActiveRoom() {
 }
 
 function ensureInputReady() {
-    if (!activeRoomId) return;
     promptInputEl.disabled = false;
     sendBtnEl.disabled = false;
     promptInputEl.removeAttribute("disabled");
     sendBtnEl.removeAttribute("disabled");
     updateInputContextHint();
+}
+
+function getCurrentSettingsData() {
+    return {
+        model: document.getElementById("settings-model").value,
+        system_prompt: document.getElementById("settings-system-prompt").value.trim(),
+        temperature: parseFloat(document.getElementById("settings-temperature").value) || 0.8,
+        max_tokens: parseInt(document.getElementById("settings-max-tokens").value) || 2048,
+        web_search_enabled: webSearchFastToggle.checked,
+        web_scrape_enabled: document.getElementById("settings-web-scrape").checked,
+        search_engine: document.getElementById("settings-search-engine").value,
+        thinking_mode: thinkingModeFastSelect.value
+    };
+}
+
+async function saveCurrentSettingsForActiveRoom() {
+    if (!activeRoomId || isTemporaryRoom(activeRoomId)) return;
+    const settingsData = getCurrentSettingsData();
+    try {
+        const res = await apiFetch(`/api/settings/${activeRoomId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(settingsData)
+        });
+        if (!res.ok) throw new Error("Settings save failed");
+        updateStatusPanel(settingsData);
+    } catch (e) {
+        console.error("Error saving current room settings:", e);
+    }
 }
 
 function initializeSidebarState() {
@@ -771,7 +837,11 @@ window.addEventListener("resize", () => updateSidebarBackdrop());
 // Send active prompt message
 async function sendMessage() {
     const text = promptInputEl.value.trim();
-    if ((!text && selectedFiles.length === 0) || !activeRoomId) return;
+    if (!text && selectedFiles.length === 0) return;
+    if (!activeRoomId) {
+        await ensureActiveRoom();
+    }
+    await saveCurrentSettingsForActiveRoom();
     if (activeToolMode === "image") {
         await sendImageGeneration(text);
         return;
@@ -901,7 +971,10 @@ async function sendMessage() {
 }
 
 async function sendImageGeneration(text) {
-    if (!text || !activeRoomId) return;
+    if (!text) return;
+    if (!activeRoomId) {
+        await ensureActiveRoom();
+    }
     promoteDraftRoom(activeRoomId);
 
     promptInputEl.value = "";
