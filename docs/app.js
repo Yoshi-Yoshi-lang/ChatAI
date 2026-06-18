@@ -242,7 +242,7 @@ function renderRooms() {
 function getRoomSummary(roomId) {
     if (draftRoomIds.has(String(roomId))) {
         return roomSummaries[String(roomId)] || {
-            title: `チャット ${roomId.toString().slice(-6)}`,
+            title: "新しいチャット",
             snippet: "未送信",
             updated: null
         };
@@ -255,7 +255,7 @@ function getRoomSummary(roomId) {
         };
     }
     return roomSummaries[String(roomId)] || {
-        title: `チャット ${roomId.toString().slice(-6)}`,
+        title: "新しいチャット",
         snippet: `ID ${roomId}`,
         updated: null
     };
@@ -327,7 +327,7 @@ async function deleteRoom(roomId) {
             messagesContainerEl.replaceChildren();
             welcomeScreenEl.classList.remove("hidden");
             messagesContainerEl.appendChild(welcomeScreenEl);
-            activeRoomTitleEl.textContent = "ルームを選択してください";
+            activeRoomTitleEl.textContent = "";
             resetStatusPanel();
             disableInputs();
         }
@@ -444,7 +444,7 @@ function setupEventListeners() {
     // Send message handling
     sendBtnEl.addEventListener("click", sendMessage);
     promptInputEl.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && e.ctrlKey) {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             sendMessage();
         }
@@ -659,7 +659,7 @@ function updateToolModeUI() {
     document.body.classList.toggle("image-mode-active", activeToolMode === "image");
     promptInputEl.placeholder = activeToolMode === "image"
         ? "生成したい画像を説明してください..."
-        : "メッセージを入力してください... (Ctrl+Enter で送信)";
+        : "メッセージを入力してください... (Cmd/Ctrl+Enter で送信)";
     renderAttachmentBar();
     ensureInputReady();
     updateInputContextHint();
@@ -681,7 +681,7 @@ async function createAndSelectLocalRoom({ temporary = false } = {}) {
         draftRoomIds.add(newRoomId);
     }
     roomSummaries[newRoomId] = {
-        title: temporary ? "一時チャット" : `チャット ${newRoomId.slice(-6)}`,
+        title: temporary ? "一時チャット" : "新しいチャット",
         snippet: temporary ? "履歴に保存されません" : "新しいチャット",
         updated: new Date().toISOString()
     };
@@ -998,12 +998,12 @@ function updateRoomSummaryFromPrompt(roomId, text) {
     const compact = text.replace(/\s+/g, " ").trim();
     if (!roomSummaries[key]) {
         roomSummaries[key] = {
-            title: `チャット ${roomId.toString().slice(-6)}`,
+            title: "新しいチャット",
             snippet: "",
             updated: null
         };
     }
-    if (roomSummaries[key].title.startsWith("チャット ")) {
+    if (roomSummaries[key].title === "新しいチャット" || roomSummaries[key].title.startsWith("チャット ")) {
         roomSummaries[key].title = createAutoTitle(compact);
     } else if (isTemporaryRoom(key) && roomSummaries[key].title === "一時チャット") {
         roomSummaries[key].title = `一時: ${createAutoTitle(compact)}`;
@@ -1104,19 +1104,19 @@ function updateStatusPanel(config = null) {
     const webEnabled = config ? !!config.web_search_enabled : webSearchFastToggle.checked;
     const thinkingMode = config?.thinking_mode || thinkingModeFastSelect.value || "off";
 
-    modelStatusEl.textContent = model ? compactModelName(model) : "モデル未選択";
-    webStatusEl.textContent = webEnabled ? "Web検索 On" : "Web検索 Off";
+    modelStatusEl.textContent = model ? compactModelName(model) : "";
+    webStatusEl.textContent = webEnabled ? "Web検索 On" : "";
     webStatusEl.classList.toggle("active", webEnabled);
-    thinkingStatusEl.textContent = getThinkingLabel(thinkingMode);
+    thinkingStatusEl.textContent = thinkingMode !== "off" ? getThinkingLabel(thinkingMode) : "";
     thinkingStatusEl.classList.toggle("active", thinkingMode !== "off");
     updateInputContextHint();
 }
 
 function resetStatusPanel() {
-    modelStatusEl.textContent = "モデル未選択";
-    webStatusEl.textContent = "Web検索 Off";
+    modelStatusEl.textContent = "";
+    webStatusEl.textContent = "";
     webStatusEl.classList.remove("active");
-    thinkingStatusEl.textContent = "通常";
+    thinkingStatusEl.textContent = "";
     thinkingStatusEl.classList.remove("active");
     updateInputContextHint();
 }
@@ -1133,7 +1133,7 @@ function getThinkingLabel(mode) {
 
 function updateInputContextHint() {
     if (!activeRoomId) {
-        inputContextHintEl.textContent = "チャットを選択すると入力できます";
+        inputContextHintEl.textContent = "";
         return;
     }
     const parts = [];
@@ -1147,7 +1147,7 @@ function updateInputContextHint() {
     }
     if (activeToolMode === "image") parts.push("画像生成モード");
     if (webSearchFastToggle.checked) parts.push("Web検索");
-    inputContextHintEl.textContent = parts.length ? parts.join(" / ") : "Ctrl+Enter で送信";
+    inputContextHintEl.textContent = parts.length ? parts.join(" / ") : "";
 }
 
 function compareRoomIds(a, b) {
