@@ -515,6 +515,57 @@ body.sidebar-collapsed .sidebar {
     font-size: 0.95rem;
 }
 
+.backend-setup {
+    display: flex;
+    min-height: 100%;
+    max-width: 620px;
+    margin: 0 auto;
+    flex-direction: column;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+
+.backend-setup h2 {
+    margin-bottom: 8px;
+    color: var(--text-primary);
+    font-size: 1.32rem;
+    font-weight: 650;
+}
+
+.backend-setup p {
+    font-size: 0.94rem;
+}
+
+.backend-setup-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.backend-setup-form input {
+    min-width: 0;
+    flex: 1;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-page);
+    color: var(--text-primary);
+    outline: none;
+    font-size: 16px;
+}
+
+.backend-setup-form input:focus {
+    border-color: #9ca3af;
+    box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+}
+
+.backend-setup-help {
+    margin-top: 10px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
 .welcome-actions,
 .empty-actions {
     display: flex;
@@ -1378,6 +1429,19 @@ input:checked + .slider::before {
     .input-panel {
         gap: 8px;
         padding: 8px 10px calc(10px + var(--safe-bottom));
+    }
+
+    .backend-setup {
+        justify-content: flex-start;
+        padding-top: 18px;
+    }
+
+    .backend-setup-form {
+        flex-direction: column;
+    }
+
+    .backend-setup-form .welcome-action {
+        width: 100%;
     }
 
     .input-wrapper {
