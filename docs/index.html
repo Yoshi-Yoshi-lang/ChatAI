@@ -46,11 +46,11 @@
         <main class="chat-area">
             <header class="top-nav">
                 <div class="room-info">
-                    <h1 id="active-room-title">ルームを選択してください</h1>
-                    <div class="room-status">
-                        <span id="model-status" class="status-pill">モデル未選択</span>
-                        <span id="web-status" class="status-pill">Web検索 Off</span>
-                        <span id="thinking-status" class="status-pill">通常</span>
+                    <h1 id="active-room-title"></h1>
+                    <div class="room-status hidden">
+                        <span id="model-status" class="status-pill"></span>
+                        <span id="web-status" class="status-pill"></span>
+                        <span id="thinking-status" class="status-pill"></span>
                     </div>
                 </div>
                 <div class="top-actions">
@@ -103,7 +103,7 @@
                         </div>
                     </div>
                     <input id="file-input" type="file" multiple class="hidden" accept=".txt,.md,.markdown,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yaml,.yml,.ini,.cfg,.conf,.log,.pdf,image/*">
-                    <textarea id="prompt-input" placeholder="メッセージを入力してください... (Ctrl+Enter で送信)" rows="1" disabled></textarea>
+                    <textarea id="prompt-input" placeholder="メッセージを入力してください... (Cmd/Ctrl+Enter で送信)" rows="1" disabled></textarea>
                     <button id="send-btn" class="send-btn" disabled>
                         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                     </button>
@@ -123,7 +123,7 @@
                             <option value="debate">討論モード (Debate)</option>
                         </select>
                     </div>
-                    <div id="input-context-hint" class="input-context-hint">チャットを選択すると入力できます</div>
+                    <div id="input-context-hint" class="input-context-hint hidden"></div>
                 </div>
             </div>
         </main>
