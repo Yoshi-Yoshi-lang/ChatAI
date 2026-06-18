@@ -546,6 +546,14 @@ async function loadHistory(roomId) {
 
 // Setup static event listeners
 function setupEventListeners() {
+    setupSidebarEvents();
+    setupToolMenuEvents();
+    setupChatInputEvents();
+    setupRoomEvents();
+    setupSettingsEvents();
+}
+
+function setupSidebarEvents() {
     sidebarBackdropEl.addEventListener("click", () => setSidebarCollapsed(true));
     railBrandBtnEl.addEventListener("click", () => toggleSidebar());
     railHistoryBtnEl.addEventListener("click", () => openSidebar());
@@ -558,6 +566,13 @@ function setupEventListeners() {
         await ensureActiveRoom();
         settingsModalEl.classList.remove("hidden");
     });
+    historySearchEl.addEventListener("input", () => {
+        roomSearchQuery = historySearchEl.value.trim();
+        renderRooms();
+    });
+}
+
+function setupToolMenuEvents() {
     toolMenuBtnEl.addEventListener("click", (event) => {
         event.stopPropagation();
         toggleToolMenu();
@@ -586,12 +601,9 @@ function setupEventListeners() {
             closeToolMenu();
         }
     });
+}
 
-    historySearchEl.addEventListener("input", () => {
-        roomSearchQuery = historySearchEl.value.trim();
-        renderRooms();
-    });
-
+function setupChatInputEvents() {
     // Send message handling
     sendBtnEl.addEventListener("click", sendMessage);
     promptInputEl.addEventListener("input", autoResizePromptInput);
@@ -601,15 +613,6 @@ function setupEventListeners() {
             sendMessage();
         }
     });
-
-    // Create room
-    newRoomBtnEl.addEventListener("click", () => {
-        createAndSelectLocalRoom();
-    });
-    temporaryRoomBtnEl.addEventListener("click", () => {
-        createAndSelectLocalRoom({ temporary: true });
-    });
-
     welcomeScreenEl.addEventListener("click", async (event) => {
         const actionButton = event.target.closest("[data-action]");
         if (!actionButton) return;
@@ -627,7 +630,19 @@ function setupEventListeners() {
             promptInputEl.focus();
         }
     });
+}
 
+function setupRoomEvents() {
+    // Create room
+    newRoomBtnEl.addEventListener("click", () => {
+        createAndSelectLocalRoom();
+    });
+    temporaryRoomBtnEl.addEventListener("click", () => {
+        createAndSelectLocalRoom({ temporary: true });
+    });
+}
+
+function setupSettingsEvents() {
     settingsCloseBtnEl.addEventListener("click", () => {
         settingsModalEl.classList.add("hidden");
     });
